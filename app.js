@@ -1,20 +1,29 @@
 /* ============================================================================
-   ໄພ້ໂກຍ — Lao Card Table
+   ໄພ່ລາວ — Lao Card Table
+   Serverless realtime multiplayer using Firebase Realtime Database.
+   One client (the room creator / seat 0) acts as "host": it is the only
+   client that mutates authoritative game state. Everyone else sends
+   intents to rooms/{id}/actions and the host applies them.
    ============================================================================ */
 
 (function(){
 "use strict";
 
 /* ---------------------------------------------------------------------- */
-/* 0. CONFIG                                                              */
+/* 0. CONFIG — tweak these to change house-rule interpretations           */
 /* ---------------------------------------------------------------------- */
 const CONFIG = {
   cardsPerPlayer: 9,
   turnSeconds: 20,
+  // a single 10/J/Q/K on the table can be "chopped" by a triple
   chopBigSingleWithTriple: true,
   bigSingleRanks: ['10','J','Q','K'],
+  // a straight (3+, same suit) can chop any single card
   chopSingleWithStraight: true,
+  // a 4+ same-suit straight ("Super Straight") can only be played on a
+  // single "2" and wins the game instantly for whoever plays it
   superStraightBeatsTwoAndWins: true,
+  // a four-of-a-kind found in a starting hand ("Super Quad") wins instantly
   quadInHandAutoWins: true,
 };
 
@@ -54,20 +63,28 @@ function isStraightCards(cards){
   return true;
 }
 
+// Returns a combo descriptor or null if the given card strings don't form
+// any legal combination.
 function classifyCombo(cardStrs){
   if(!cardStrs || !cardStrs.length) return null;
   const cards = cardStrs.map(parseCard);
   const n = cards.length;
 
   if(n === 1) return { type:'single', highVal: cards[0].val, len:1 };
+
   if(n === 2){
     if(cards[0].rank === cards[1].rank && suitColor(cards[0].suit) === suitColor(cards[1].suit)){
       return { type:'pair', highVal: cards[0].val, len:2 };
     }
     return null;
   }
-  if(n === 3 && cards.every(c=>c.rank===cards[0].rank)) return { type:'triple', highVal: cards[0].val, len:3 };
-  if(n === 4 && cards.every(c=>c.rank===cards[0].rank)) return { type:'quad', highVal: cards[0].val, len:4 };
+
+  if(n === 3 && cards.every(c=>c.rank===cards[0].rank)){
+    return { type:'triple', highVal: cards[0].val, len:3 };
+  }
+  if(n === 4 && cards.every(c=>c.rank===cards[0].rank)){
+    return { type:'quad', highVal: cards[0].val, len:4 };
+  }
 
   if(n >= 3 && isStraightCards(cards)){
     const highVal = Math.max(...cards.map(c=>c.val));
@@ -76,14 +93,23 @@ function classifyCombo(cardStrs){
   return null;
 }
 
+// Can `play` legally beat `last`? (last === null means "free lead", anything goes)
 function canBeat(play, last){
   if(!last) return { ok:true };
-  if(play.type === last.type && play.len === last.len) return { ok: play.highVal > last.highVal };
+  if(play.type === last.type && play.len === last.len){
+    return { ok: play.highVal > last.highVal };
+  }
   if(last.type === 'single'){
     const lastRank = RANKS[last.highVal];
-    if(CONFIG.chopBigSingleWithTriple && play.type === 'triple' && CONFIG.bigSingleRanks.includes(lastRank)) return { ok:true, chop:true };
-    if(play.type === 'superstraight' && lastRank === '2' && CONFIG.superStraightBeatsTwoAndWins) return { ok:true, chop:true, instantWin:true };
-    if(CONFIG.chopSingleWithStraight && (play.type === 'straight' || play.type === 'superstraight') && lastRank !== '2') return { ok:true, chop:true };
+    if(CONFIG.chopBigSingleWithTriple && play.type === 'triple' && CONFIG.bigSingleRanks.includes(lastRank)){
+      return { ok:true, chop:true };
+    }
+    if(play.type === 'superstraight' && lastRank === '2' && CONFIG.superStraightBeatsTwoAndWins){
+      return { ok:true, chop:true, instantWin:true };
+    }
+    if(CONFIG.chopSingleWithStraight && (play.type === 'straight' || play.type === 'superstraight') && lastRank !== '2'){
+      return { ok:true, chop:true };
+    }
   }
   return { ok:false };
 }
@@ -109,6 +135,8 @@ function sortHand(hand, mode){
   return arr;
 }
 
+/* Suggest candidate combos in `hand` that contain `cardStr` and are legal
+   right now (used for the "smart popup" when a single tap is ambiguous). */
 function candidateCombosContaining(hand, cardStr, lastCombo){
   const out = [];
   const seen = new Set();
@@ -117,7 +145,7 @@ function candidateCombosContaining(hand, cardStr, lastCombo){
     if(seen.has(key)) return;
     const combo = classifyCombo(cards);
     if(!combo) return;
-    if(combo.type === 'quad') return;
+    if(combo.type === 'quad') return; // quad isn't a normal playable move
     const res = canBeat(combo, lastCombo);
     if(!res.ok) return;
     seen.add(key);
@@ -125,14 +153,20 @@ function candidateCombosContaining(hand, cardStr, lastCombo){
   };
 
   const target = parseCard(cardStr);
-  push([cardStr]);
+  push([cardStr]); // plain single
+
+  // pair partner: same rank, same color
   const pairPartner = hand.find(c => c!==cardStr && parseCard(c).rank===target.rank && suitColor(parseCard(c).suit)===suitColor(target.suit));
   if(pairPartner) push([cardStr, pairPartner].sort());
+
+  // triple: any 3 cards sharing the rank
   const sameRank = hand.filter(c => parseCard(c).rank === target.rank);
   if(sameRank.length >= 3) push(sameRank.slice(0,3));
 
+  // straights: runs of consecutive same-suit cards (excluding '2') containing target
   const sameSuit = hand.filter(c => parseCard(c).suit === target.suit && parseCard(c).rank !== '2');
   const vals = [...new Set(sameSuit.map(c=>parseCard(c).val))].sort((a,b)=>a-b);
+  // find the run containing target.val
   let runStart=null, runEnd=null;
   for(let i=0;i<vals.length;i++){
     if(vals[i]===target.val){
@@ -158,7 +192,7 @@ function candidateCombosContaining(hand, cardStr, lastCombo){
 }
 
 /* ---------------------------------------------------------------------- */
-/* 2. Firebase + Offline Mock Setup                                       */
+/* 2. Firebase setup                                                      */
 /* ---------------------------------------------------------------------- */
 let db = null;
 let fbReady = false;
@@ -170,94 +204,7 @@ try{
   console.error('Firebase init failed', e);
 }
 
-// ລະບົບຈຳລອງຖານຂໍ້ມູນສຳລັບໂໝດ Offline
-const MOCK_DB = {};
-const mockListeners = {};
-
-function getMockSnap(path) {
-  const parts = path.split('/').filter(x=>x);
-  let cur = MOCK_DB;
-  for(let p of parts) { if(cur === undefined || cur === null) break; cur = cur[p]; }
-  return {
-    exists: () => cur !== undefined && cur !== null,
-    val: () => cur,
-    key: parts.length ? parts[parts.length-1] : 'root'
-  };
-}
-function setMockVal(path, val) {
-  const parts = path.split('/').filter(x=>x);
-  if(parts.length === 0) { Object.assign(MOCK_DB, val); return; }
-  let cur = MOCK_DB;
-  for(let i=0; i<parts.length-1; i++) {
-    if(cur[parts[i]] === undefined || cur[parts[i]] === null) cur[parts[i]] = {};
-    cur = cur[parts[i]];
-  }
-  if(val === null) delete cur[parts[parts.length-1]];
-  else cur[parts[parts.length-1]] = val;
-  triggerMock(path, val);
-}
-function triggerMock(path, val) {
-  const parts = path.split('/').filter(x=>x);
-  let p = '';
-  for(let i=0; i<parts.length; i++) {
-    p = p ? p + '/' + parts[i] : parts[i];
-    if(mockListeners[p] && mockListeners[p]['value']) {
-      const snap = getMockSnap(p);
-      mockListeners[p]['value'].forEach(cb => cb(snap));
-    }
-  }
-  if (parts.length > 1 && val !== null) {
-    const parent = parts.slice(0, -1).join('/');
-    if (mockListeners[parent] && mockListeners[parent]['child_added']) {
-      const snap = getMockSnap(path);
-      mockListeners[parent]['child_added'].forEach(cb => cb(snap));
-    }
-  }
-}
-
-class MockRef {
-  constructor(path) { this.path = path.replace(/\/+$/, ''); }
-  child(p) { return new MockRef(this.path + '/' + p); }
-  async get() { return getMockSnap(this.path); }
-  async set(val) { setMockVal(this.path, val); }
-  async update(val) { for(let k in val) setMockVal(this.path + '/' + k, val[k]); }
-  async remove() { setMockVal(this.path, null); }
-  push(val) {
-    const key = 'push_' + Math.random().toString(36).slice(2);
-    if(val !== undefined) setMockVal(this.path + '/' + key, val);
-    return Promise.resolve({ key });
-  }
-  on(event, cb) {
-    if(!mockListeners[this.path]) mockListeners[this.path] = {};
-    if(!mockListeners[this.path][event]) mockListeners[this.path][event] = [];
-    mockListeners[this.path][event].push(cb);
-    if(event === 'value') cb(getMockSnap(this.path));
-    else if (event === 'child_added') {
-      const snap = getMockSnap(this.path);
-      const val = snap.val();
-      if (val && typeof val === 'object') {
-        for(let k in val) cb(getMockSnap(this.path + '/' + k));
-      }
-    }
-  }
-  off(event, cb) {
-    if(mockListeners[this.path] && mockListeners[this.path][event]) {
-      mockListeners[this.path][event] = mockListeners[this.path][event].filter(f => f !== cb);
-    }
-  }
-  async transaction(fn) {
-    const snap = getMockSnap(this.path);
-    const newVal = fn(snap.val());
-    if(newVal !== undefined) setMockVal(this.path, newVal);
-    return { committed: true, snapshot: getMockSnap(this.path) };
-  }
-}
-
-// ຮອງຮັບໂໝດ Offline ດ້ວຍ MockDB
-function roomRef(id){ 
-  if(window.isOfflineMode) return new MockRef('rooms/'+id);
-  return db.ref('rooms/'+id); 
-}
+function roomRef(id){ return db.ref('rooms/'+id); }
 
 /* ---------------------------------------------------------------------- */
 /* 3. Local identity + state                                              */
@@ -275,8 +222,8 @@ let STATE = {
   roomId: null,
   isHost: false,
   myName: '',
-  players: {},
-  seatOrder: [],
+  players: {},      // uid -> {name, seat}
+  seatOrder: [],     // uid[] ordered by seat
   status: 'idle',
   table: null,
   myHand: [],
@@ -308,11 +255,11 @@ function toast(msg, ms=2600){
 }
 
 if(!fbReady){
-  toast('ບໍ່ມີອິນເຕີເນັດ ຫຼື ຍັງບໍ່ໄດ້ຕັ້ງຄ່າ Firebase, ສາມາດຫຼິ້ນໂໝດ Offline ໄດ້', 8000);
+  toast('ຍັງບໍ່ໄດ້ຕັ້ງຄ່າ Firebase — ແກ້ໄຟລ໌ config.js ກ່ອນ (ເບິ່ງ README.md)', 8000);
 }
 
 /* ---------------------------------------------------------------------- */
-/* 5. Landing screen — create / join / offline                            */
+/* 5. Landing screen — create / join                                      */
 /* ---------------------------------------------------------------------- */
 let landingTab = 'create';
 $('tab-create').onclick = ()=>{ landingTab='create'; $('tab-create').classList.add('active'); $('tab-join').classList.remove('active'); $('panel-create').classList.remove('hidden'); $('panel-join').classList.add('hidden'); };
@@ -336,23 +283,23 @@ function landingError(msg){
 }
 function clearLandingError(){ $('err-landing').classList.add('hidden'); }
 
-// ສ້າງຫ້ອງອອນລາຍປົກກະຕິ
 $('btn-create-room').onclick = async ()=>{
   clearLandingError();
   const name = $('input-name').value.trim();
   const code = $('create-code').value.trim();
-  if(!fbReady) return landingError('ບໍ່ພົບອິນເຕີເນັດ/Firebase, ກະລຸນາເລືອກ ຫຼິ້ນ Offline');
+  if(!fbReady) return landingError('ຍັງບໍ່ໄດ້ຕັ້ງຄ່າ Firebase (ເບິ່ງ README.md)');
   if(!name) return landingError('ກະລຸນາໃສ່ຊື່ຂອງທ່ານ');
   if(code.length !== 4) return landingError('ລະຫັດຫ້ອງຕ້ອງເປັນ 4 ຕົວເລກ');
 
-  window.isOfflineMode = false;
   const roomId = `${createSeatN}_${code}`;
   const ref = roomRef(roomId);
   try{
     const snap = await ref.get();
     if(snap.exists()){
       const existingStatus = (snap.val().meta || {}).status;
-      if(existingStatus === 'waiting' || existingStatus === 'playing') return landingError('ລະຫັດ ແລະ ໂໝດນີ້ຖືກໃຊ້ຢູ່ແລ້ວ, ລອງລະຫັດອື່ນ');
+      if(existingStatus === 'waiting' || existingStatus === 'playing'){
+        return landingError('ລະຫັດ ແລະ ໂໝດນີ້ຖືກໃຊ້ຢູ່ແລ້ວ, ລອງລະຫັດອື່ນ');
+      }
     }
     await ref.set({
       meta: { maxPlayers: createSeatN, code, status:'waiting', hostUid: MY_UID, createdAt: Date.now() },
@@ -361,40 +308,19 @@ $('btn-create-room').onclick = async ()=>{
     STATE.myName = name;
     enterRoom(roomId, true);
   }catch(e){
+    console.error(e);
     landingError('ເຊື່ອມຕໍ່ Firebase ບໍ່ໄດ້: ' + e.message);
   }
-};
-
-// ສ້າງຫ້ອງໂໝດ Offline ຫຼິ້ນກັບບັອດ
-$('btn-offline-mode').onclick = async () => {
-  clearLandingError();
-  const name = $('input-name').value.trim() || 'ຜູ້ຫຼິ້ນ';
-  STATE.myName = name;
-  window.isOfflineMode = true; 
-  
-  const roomId = `offline_${Math.random().toString(36).slice(2,6)}`;
-  const maxPlayers = createSeatN;
-  
-  const players = { [MY_UID]: { name, seat:0 } };
-  for(let i=1; i<maxPlayers; i++) players[`bot_${i}`] = { name: `ບັອດ ${i}`, seat: i };
-  
-  const ref = roomRef(roomId);
-  await ref.set({
-      meta: { maxPlayers, code: 'OFFL', status: 'waiting', hostUid: MY_UID, createdAt: Date.now() },
-      players
-  });
-  enterRoom(roomId, true);
 };
 
 $('btn-join-room').onclick = async ()=>{
   clearLandingError();
   const name = $('input-name').value.trim();
   const code = $('join-code').value.trim();
-  if(!fbReady) return landingError('ບໍ່ພົບອິນເຕີເນັດ/Firebase');
+  if(!fbReady) return landingError('ຍັງບໍ່ໄດ້ຕັ້ງຄ່າ Firebase (ເບິ່ງ README.md)');
   if(!name) return landingError('ກະລຸນາໃສ່ຊື່ຂອງທ່ານ');
   if(code.length !== 4) return landingError('ລະຫັດຫ້ອງຕ້ອງເປັນ 4 ຕົວເລກ');
 
-  window.isOfflineMode = false;
   const roomId = `${joinSeatN}_${code}`;
   const ref = roomRef(roomId);
   try{
@@ -413,6 +339,7 @@ $('btn-join-room').onclick = async ()=>{
     STATE.myName = name;
     enterRoom(roomId, seat===0);
   }catch(e){
+    console.error(e);
     landingError('ເຊື່ອມຕໍ່ Firebase ບໍ່ໄດ້: ' + e.message);
   }
 };
@@ -428,15 +355,25 @@ function enterRoom(roomId, isHost){
   if(STATE.roomListener) STATE.roomListener();
   const ref = roomRef(roomId);
   const cb = (snap)=> onRoomUpdate(snap.val());
-  const cbErr = (err)=> toast('ອ່ານຂໍ້ມູນຫ້ອງບໍ່ໄດ້: ' + err.message, 6000);
+  const cbErr = (err)=>{
+    console.error('room listener error', err);
+    toast('ອ່ານຂໍ້ມູນຫ້ອງບໍ່ໄດ້: ' + err.message + ' — ກວດ Firebase Database Rules', 6000);
+  };
   ref.on('value', cb, cbErr);
   STATE.roomListener = ()=>ref.off('value', cb);
 
   if(isHost){
     if(STATE.actionsListener) STATE.actionsListener();
     const actRef = ref.child('actions');
-    const actCb = (snap)=>{ hostProcessAction(roomId, snap.key, snap.val()); };
-    actRef.on('child_added', actCb, cbErr);
+    const actCb = (snap)=>{
+      const key = snap.key, val = snap.val();
+      hostProcessAction(roomId, key, val);
+    };
+    const actErr = (err)=>{
+      console.error('actions listener error', err);
+      toast('ໂຮສຮັບຄຳສັ່ງບໍ່ໄດ້ (actions): ' + err.message + ' — ກວດ Firebase Database Rules', 6000);
+    };
+    actRef.on('child_added', actCb, actErr);
     STATE.actionsListener = ()=>actRef.off('child_added', actCb);
     startHostWatchdog(roomId);
   }
@@ -446,30 +383,9 @@ function leaveRoom(){
   if(STATE.roomListener) STATE.roomListener();
   if(STATE.actionsListener) STATE.actionsListener();
   if(STATE.hostWatchdog) clearInterval(STATE.hostWatchdog);
-  
-  // ລຶບຫ້ອງເປົ່າຖ້າທຸກຄົນອອກ ແລະ ຣີເຊັດການຕັ້ງຄ່າ
   if(STATE.roomId){
-    if(!window.isOfflineMode) {
-      const rId = STATE.roomId;
-      roomRef(rId).child('players/'+MY_UID).remove().then(() => {
-         roomRef(rId).child('players').get().then(snap => {
-             if(!snap.exists() || Object.keys(snap.val()).length === 0) roomRef(rId).remove();
-         }).catch(()=>{});
-      }).catch(()=>{});
-    }
+    roomRef(STATE.roomId).child('players/'+MY_UID).remove().catch(()=>{});
   }
-
-  // ຣີເຊັດໂໝດ ແລະ ເລກຫ້ອງທຸກຄັ້ງທີ່ອອກ
-  $('create-code').value = '';
-  $('join-code').value = '';
-  createSeatN = 4;
-  joinSeatN = 4;
-  document.querySelectorAll('#create-seat-choice button').forEach(x=>x.classList.remove('active'));
-  document.querySelector('#create-seat-choice button[data-n="4"]').classList.add('active');
-  document.querySelectorAll('#join-seat-choice button').forEach(x=>x.classList.remove('active'));
-  document.querySelector('#join-seat-choice button[data-n="4"]').classList.add('active');
-
-  window.isOfflineMode = false;
   STATE.roomId = null; STATE.isHost=false; STATE.players={}; STATE.seatOrder=[];
   STATE.status='idle'; STATE.table=null; STATE.myHand=[]; STATE.selected=new Set();
   showScreen('landing');
@@ -521,7 +437,10 @@ function renderWaitingRoom(meta){
   $('btn-start-game').classList.toggle('hidden', !(STATE.isHost && full));
 }
 
-$('btn-start-game').onclick = async ()=>{ if(STATE.isHost && STATE.roomId) await hostStartGame(STATE.roomId); };
+$('btn-start-game').onclick = async ()=>{
+  if(!STATE.isHost || !STATE.roomId) return;
+  await hostStartGame(STATE.roomId);
+};
 
 function escapeHtml(s){ const d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
 
@@ -532,6 +451,7 @@ async function hostStartGame(roomId){
   const ref = roomRef(roomId);
   const snap = await ref.get();
   const val = snap.val();
+  const meta = val.meta;
   const seatOrder = Object.entries(val.players).sort((a,b)=>a[1].seat-b[1].seat).map(([uid])=>uid);
   const n = seatOrder.length;
 
@@ -540,9 +460,15 @@ async function hostStartGame(roomId){
   for(let i=0;i<n;i++) hands[seatOrder[i]] = deck.slice(i*CONFIG.cardsPerPlayer, (i+1)*CONFIG.cardsPerPlayer);
   const deckRemaining = deck.length - n*CONFIG.cardsPerPlayer;
 
+  // check for an instant-win "super quad" dealt straight into someone's hand
   let autoWinnerUid = null;
-  if(CONFIG.quadInHandAutoWins) for(const uid of seatOrder) if(findQuadInHand(hands[uid])){ autoWinnerUid = uid; break; }
+  if(CONFIG.quadInHandAutoWins){
+    for(const uid of seatOrder){ if(findQuadInHand(hands[uid])){ autoWinnerUid = uid; break; } }
+  }
 
+  // whoever won the previous round leads the new one; if there was no
+  // previous winner (first-ever deal) or they've since left the room,
+  // leave the lead open so the table settles it on the first play
   const prevWinnerUid = val.winnerUid;
   const startUid = (prevWinnerUid && seatOrder.includes(prevWinnerUid)) ? prevWinnerUid : null;
 
@@ -555,10 +481,19 @@ async function hostStartGame(roomId){
     deckRemaining,
   };
 
-  await ref.update({
+  const update = {
     'meta/status': autoWinnerUid ? 'finished' : 'playing',
-    hands, table, history: null, winnerUid: autoWinnerUid || null,
-  }).catch(()=>{});
+    hands,
+    table,
+    history: null,
+    winnerUid: autoWinnerUid || null,
+  };
+  try{
+    await ref.update(update);
+  }catch(e){
+    console.error('hostStartGame failed', e);
+    toast('ເລີ່ມເກມບໍ່ໄດ້: ' + e.message + ' — ກວດ Firebase Database Rules', 6000);
+  }
 }
 
 async function hostProcessAction(roomId, actionKey, action){
@@ -566,15 +501,28 @@ async function hostProcessAction(roomId, actionKey, action){
   const ref = roomRef(roomId);
   try{
     await ref.transaction((room)=>{
-      if(!room || room.meta.status !== 'playing') return room;
+      if(!room) return room;
+      if(room.meta.status !== 'playing') return room;
       applyAction(room, action);
       return room;
     });
-  }finally{
+  }catch(e){
+    console.error('processAction error', e);
+    toast('ຫຼິ້ນໄພ່ບໍ່ສຳເລັດ (host): ' + e.message + ' — ກວດ Firebase Database Rules', 6000);
+  }
+  finally{
     ref.child('actions/'+actionKey).remove().catch(()=>{});
   }
 }
 
+function nextSeatUid(seatOrder, uid){
+  const i = seatOrder.indexOf(uid);
+  return seatOrder[(i+1) % seatOrder.length];
+}
+
+// Like nextSeatUid, but skips any seat that has already passed on the
+// current trick (table.passSet) — those players stay auto-skipped until
+// the trick resets (house rule: pass once, sit out until next lead).
 function nextUnpassedUid(seatOrder, fromUid, passSet){
   const ps = passSet || {};
   let i = seatOrder.indexOf(fromUid);
@@ -586,6 +534,9 @@ function nextUnpassedUid(seatOrder, fromUid, passSet){
   return fromUid;
 }
 
+// If table.currentUid points at someone who is no longer in room.players
+// (they left / closed the tab), the game gets stuck forever: nobody's
+// isMyTurn check ever matches. Snap the turn to the first remaining seat.
 function healCurrentUid(room){
   const table = room.table;
   if(!table) return;
@@ -597,20 +548,25 @@ function healCurrentUid(room){
   }
 }
 
+// Mutates `room` in place applying a validated play/pass action. Used both
+// inside the Firebase transaction and by the host's timeout watchdog.
 function applyAction(room, action){
   healCurrentUid(room);
   const seatOrder = Object.entries(room.players).sort((a,b)=>a[1].seat-b[1].seat).map(([uid])=>uid);
   const table = room.table;
   const uid = action.uid;
 
-  if((table.currentUid !== uid) && !(table.currentUid === null && table.freeLead)) return;
+  const isMyTurn = (table.currentUid === uid) || (table.currentUid === null && table.freeLead);
+  if(!isMyTurn) return;
 
   if(action.kind === 'pass'){
-    if(table.freeLead) return;
+    if(table.freeLead) return; // can't pass when you must lead
     table.passSet = table.passSet || {};
     table.passSet[uid] = true;
     const ownerUid = table.lastCombo ? table.lastCombo.ownerUid : null;
     const ownerStillHere = ownerUid && seatOrder.includes(ownerUid);
+    // skip anyone who already passed this trick — it ends the instant
+    // only the current combo's owner (or nobody) is left unpassed
     const nxt = nextUnpassedUid(seatOrder, uid, table.passSet);
     if(!ownerStillHere || nxt === ownerUid || nxt === uid){
       table.lastCombo = null;
@@ -627,19 +583,27 @@ function applyAction(room, action){
   if(action.kind === 'play'){
     const hand = (room.hands && room.hands[uid]) || [];
     const cards = action.cards || [];
-    if(!cards.every(c=>hand.includes(c))) return;
+    if(!cards.every(c=>hand.includes(c))) return; // cheating / stale hand guard
     const combo = classifyCombo(cards);
     if(!combo || combo.type==='quad') return;
     const result = canBeat(combo, table.freeLead ? null : table.lastCombo);
     if(!result.ok) return;
 
+    // remove cards from hand
     const newHand = hand.filter(c=>!cards.includes(c));
     room.hands[uid] = newHand;
 
+    // history (cap at last 60 entries)
     room.history = room.history || {};
-    room.history['h'+Date.now()+Math.random().toString(36).slice(2,6)] = { uid, cards, type: combo.type, ts: Date.now() };
+    const histKey = 'h'+Date.now()+Math.random().toString(36).slice(2,6);
+    room.history[histKey] = { uid, cards, type: combo.type, ts: Date.now() };
 
-    if(result.instantWin || newHand.length === 0){
+    if(result.instantWin){
+      room.meta.status = 'finished';
+      room.winnerUid = uid;
+      return;
+    }
+    if(newHand.length === 0){
       room.meta.status = 'finished';
       room.winnerUid = uid;
       return;
@@ -647,19 +611,26 @@ function applyAction(room, action){
 
     table.lastCombo = { type: combo.type, len: combo.len, highVal: combo.highVal, cards, ownerUid: uid };
     table.freeLead = false;
+    // passSet carries over within the same trick — anyone who already
+    // passed stays skipped until the trick resets (auto-pass house rule)
     table.passSet = table.passSet || {};
     delete table.passSet[uid];
     const nxt = nextUnpassedUid(seatOrder, uid, table.passSet);
     if(nxt === uid){
+      // everyone else has already passed this trick — lead a fresh one
       table.lastCombo = null;
       table.freeLead = true;
       table.currentUid = uid;
       table.passSet = {};
-    } else table.currentUid = nxt;
+    } else {
+      table.currentUid = nxt;
+    }
     table.deadline = Date.now() + CONFIG.turnSeconds*1000;
   }
 }
 
+// Host-only watchdog: force-pass / force-play the smallest card when a
+// player's 20s timer runs out. Runs only in the host's browser tab.
 function startHostWatchdog(roomId){
   if(STATE.hostWatchdog) clearInterval(STATE.hostWatchdog);
   STATE.hostWatchdog = setInterval(async ()=>{
@@ -668,6 +639,8 @@ function startHostWatchdog(roomId){
     const room = snap.val();
     if(!room || room.meta.status !== 'playing') return;
 
+    // Fix a stuck turn (currentUid pointing at someone who left) right away,
+    // don't wait for the 20s deadline.
     const seatOrderNow = Object.entries(room.players||{}).sort((a,b)=>a[1].seat-b[1].seat).map(([uid])=>uid);
     if(room.table && room.table.currentUid !== null && !seatOrderNow.includes(room.table.currentUid)){
       await ref.transaction((r)=>{ if(!r) return r; healCurrentUid(r); return r; });
@@ -675,19 +648,11 @@ function startHostWatchdog(roomId){
     }
 
     const table = room.table;
-    if(!table || !table.deadline) return;
-    
-    let uid = table.currentUid;
-    if(uid === null) uid = seatOrderNow[0];
-    
-    // ລະບົບບັອດໃນໂໝດ Offline ຈະລົງໄພ່ພາຍໃນ 2 ວິນາທີ
-    const isBot = uid.startsWith('bot_');
-    if (isBot) {
-        if(Date.now() < table.deadline - (CONFIG.turnSeconds*1000) + 2000) return;
-    } else {
-        if(Date.now() < table.deadline) return;
-    }
+    if(!table || !table.deadline || Date.now() < table.deadline) return;
 
+    const seatOrder = Object.entries(room.players).sort((a,b)=>a[1].seat-b[1].seat).map(([uid])=>uid);
+    let uid = table.currentUid;
+    if(uid === null) uid = seatOrder[0];
     const hand = (room.hands && room.hands[uid]) || [];
     if(!hand.length) return;
 
@@ -697,24 +662,21 @@ function startHostWatchdog(roomId){
       action = { uid, kind:'play', cards:[sorted[0]] };
     } else {
       action = { uid, kind:'pass' };
-      if (isBot) {
-          const sorted = sortHand(hand, 'rank');
-          for (let c of sorted) {
-              const candidates = candidateCombosContaining(hand, c, table.lastCombo);
-              if (candidates.length > 0) {
-                  action = { uid, kind:'play', cards: candidates[0].cards };
-                  break;
-              }
-          }
-      }
     }
     await ref.transaction((r)=>{ if(!r) return r; applyAction(r, action); return r; });
   }, 1000);
 }
 
+/* Client -> intent helpers (writes to actions/ ; host consumes them). If
+   the local client IS the host, we still go through the same path so
+   there is exactly one code path for game logic. */
 function sendAction(kind, cards){
   if(!STATE.roomId) return;
-  roomRef(STATE.roomId).child('actions').push({ uid: MY_UID, kind, cards: cards||null, ts: Date.now() }).catch(()=>{});
+  roomRef(STATE.roomId).child('actions').push({ uid: MY_UID, kind, cards: cards||null, ts: Date.now() })
+    .catch(err=>{
+      console.error('sendAction failed', err);
+      toast('ສົ່ງຄຳສັ່ງບໍ່ໄດ້: ' + err.message + ' — ກວດ Firebase Database Rules (README ຂໍ້ 2)', 6000);
+    });
 }
 
 $('btn-play-again').onclick = async ()=>{
@@ -741,6 +703,8 @@ function cardEl(cardStr, opts={}){
   return div;
 }
 
+// Most recent combo a given player has put down (used to render their own
+// discard pile in front of their seat — piles never merge between players).
 function lastPlayForUid(uid){
   let best = null;
   for(const h of STATE.history){
@@ -750,6 +714,25 @@ function lastPlayForUid(uid){
   return best;
 }
 
+// The most recently played cards for a given player, capped at `n` —
+// each seat's on-table pile only ever shows up to this many cards, even
+// if their latest combo (a straight, quad, etc.) had more. Pulls from
+// progressively older plays if the newest play alone doesn't fill `n`.
+// Full history is still available via the history drawer (click the pile).
+function recentCardsForUid(uid, n=3){
+  const items = STATE.history.filter(h=>h.uid===uid).slice().sort((a,b)=>b.ts-a.ts);
+  const out = [];
+  for(const h of items){
+    for(const c of h.cards){
+      out.push(c);
+      if(out.length>=n) break;
+    }
+    if(out.length>=n) break;
+  }
+  return out;
+}
+
+// clicking your own pile (front-and-center) opens your play history
 $('last-combo').parentElement.style.cursor = 'pointer';
 $('last-combo').parentElement.title = 'ເບິ່ງປະຫວັດການລົງໄພ່ຂອງທ່ານ';
 $('last-combo').parentElement.onclick = ()=> openHistoryDrawer(MY_UID);
@@ -757,71 +740,74 @@ $('last-combo').parentElement.onclick = ()=> openHistoryDrawer(MY_UID);
 function renderGame(meta){
   $('game-room-tag').textContent = 'ຫ້ອງ ' + meta.code;
   const table = STATE.table;
+  const mySeat = STATE.players[MY_UID] ? STATE.players[MY_UID].seat : 0;
   const n = meta.maxPlayers;
+
+  // ---- opponent seats ----
   const oval = $('table-oval');
   oval.querySelectorAll('.seat').forEach(el=>el.remove());
   const opponents = STATE.seatOrder.filter(u=>u!==MY_UID);
   const layout = OPP_LAYOUTS[opponents.length] || OPP_LAYOUTS[4];
-  
   opponents.forEach((uid, idx)=>{
     const pos = layout[idx] || {x:50,y:50};
     const p = STATE.players[uid] || {name:'?'};
     const seatDiv = document.createElement('div');
-    const isTurn = table && table.currentUid===uid;
-    seatDiv.className = 'seat' + (isTurn ? ' turn' : '');
+    seatDiv.className = 'seat' + (table && table.currentUid===uid ? ' turn' : '');
     seatDiv.dataset.uid = uid;
     seatDiv.style.left = pos.x+'%';
     seatDiv.style.top = pos.y+'%';
     seatDiv.style.transform = 'translate(-50%,-50%)';
     const passed = table && table.passSet && table.passSet[uid];
     const count = (STATE.oppCounts && STATE.oppCounts[uid]!==undefined) ? STATE.oppCounts[uid] : '?';
-    
-    // ປ່ຽນໂຕຫຍໍ້ໃຫ້ເປັນຮູບກະດິ່ງຕາມສະຖານະ
+    const isTurnNow = !!(table && table.currentUid===uid);
     seatDiv.innerHTML = `
-      <div class="avatar">
-        <span style="font-size:1.6rem; filter:${isTurn ? 'drop-shadow(0 0 6px #FFD700)' : 'grayscale(100%) brightness(0.4)'};">🔔</span>
+      <div class="avatar bell${isTurnNow ? ' ringing' : ''}" title="${isTurnNow ? 'ຮອບຂອງ' : 'ຍັງບໍ່ເຖິງຮອບ'}${escapeHtml(p.name?(' '+p.name):'')}">
+        <svg viewBox="0 0 24 24" width="26" height="26" fill="currentColor" aria-hidden="true">
+          <path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6.32V11c0-3.07-1.64-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5S10.5 3.17 10.5 4v.68C7.65 5.36 6 7.92 6 11v4.68L4 17.68V19h16v-1.32l-2-2z"/>
+        </svg>
       </div>
       <div class="name">${escapeHtml(p.name||'')}</div>
       <div class="hand-count">🂠 × <span data-count>${count}</span></div>
       ${passed ? '<div class="passed-tag">ຜ່ານ</div>' : ''}
     `;
 
+    // each player gets their own discard pile in front of their seat —
+    // it shows only up to their 3 most recently played cards (never
+    // cards from other players' piles), and is clickable to open that
+    // player's full play history
     const isActivePile = !!(table && table.lastCombo && table.lastCombo.ownerUid === uid);
-    const lastPlay = lastPlayForUid(uid);
+    const recentCards = recentCardsForUid(uid, 3);
     const pileWrap = document.createElement('div');
-    pileWrap.className = 'seat-pile' + (isActivePile ? ' active-pile' : '') + (lastPlay ? '' : ' empty');
-    
-    // ສະແດງໄພ້ທີ່ລົງວາງຢູ່ໜ້າໂຕະໄດ້ສູງສຸດ 3 ໃບລ່າສຸດ
-    if(lastPlay){
-      const displayCards = lastPlay.cards.slice(-3);
-      displayCards.forEach(c=>pileWrap.appendChild(cardEl(c, {size:'small'})));
-    }
-    
+    pileWrap.className = 'seat-pile' + (isActivePile ? ' active-pile' : '') + (recentCards.length ? '' : ' empty');
+    recentCards.forEach(c=>pileWrap.appendChild(cardEl(c, {size:'small'})));
     pileWrap.title = 'ເບິ່ງປະຫວັດການລົງໄພ່';
     pileWrap.onclick = ()=> openHistoryDrawer(uid);
     seatDiv.appendChild(pileWrap);
+
     oval.appendChild(seatDiv);
   });
 
+  // opponent hand counts come from a lightweight mirror path we don't have
+  // directly (hands are per-uid) — fetch counts on demand:
   refreshOpponentCounts();
 
+  // ---- your own pile (front-and-center, in front of your seat) ----
   const myPileEl = $('last-combo');
   myPileEl.innerHTML = '';
   const myPileMeta = $('last-combo-meta');
   const myLastPlay = lastPlayForUid(MY_UID);
+  const myRecentCards = recentCardsForUid(MY_UID, 3);
   const myPileIsActive = !!(table && table.lastCombo && table.lastCombo.ownerUid === MY_UID);
   myPileEl.parentElement.classList.toggle('active-pile', myPileIsActive);
-  
-  if(myLastPlay){
-    // ສະແດງໄພ້ສູງສຸດ 3 ໃບສຳລັບຜູ້ຫຼິ້ນຫຼັກ
-    const displayCards = myLastPlay.cards.slice(-3);
-    displayCards.forEach(c=>myPileEl.appendChild(cardEl(c, {size:'small'})));
+  if(myRecentCards.length){
+    myRecentCards.forEach(c=>myPileEl.appendChild(cardEl(c, {size:'small'})));
     myPileMeta.textContent = `ໄພ່ຂອງທ່ານ • ${comboLabel(myLastPlay.type)}`;
   } else {
     myPileMeta.textContent = (table && table.freeLead && table.currentUid===MY_UID) ? 'ຮອບໃໝ່ — ລົງໄພ່ຫຍັງກໍໄດ້' : 'ໄພ່ຂອງທ່ານ';
   }
   $('deck-count').textContent = table ? `ໄພ່ໃນກອງ: ${table.deckRemaining ?? 0}` : '';
 
+  // ---- status + turn highlight ----
   const isMyTurn = table && ((table.currentUid===MY_UID) || (table.currentUid===null && table.freeLead));
   let statusMsg = '';
   if(STATE.status === 'finished'){ statusMsg = ''; }
@@ -843,6 +829,9 @@ function comboLabel(type){
   return { single:'ໃບດ່ຽວ', pair:'ໄພ່ຄູ່', triple:'ໄພ່ເປົາ', straight:'ໄພ່ລຽງ', superstraight:'ລຽງພິເສດ', quad:'ເປົາພິເສດ' }[type] || type;
 }
 
+// Since /hands is keyed by uid and security-rules-light, any client can
+// technically read all hands; we only ever DISPLAY our own hand in detail,
+// but we do read opponents' hand *lengths* to show remaining-card counts.
 function refreshOpponentCounts(){
   if(!STATE.roomId) return;
   roomRef(STATE.roomId).child('hands').get().then(snap=>{
@@ -949,6 +938,8 @@ $('btn-cancel-skill-choice').onclick = closeSkillChoiceModal;
 /* ---------------------------------------------------------------------- */
 /* 11. History drawer                                                     */
 /* ---------------------------------------------------------------------- */
+// filterUid: null shows everyone's history (top toolbar button); a uid
+// shows only that player's plays (clicking their pile at the table)
 function openHistoryDrawer(filterUid){
   const track = $('history-track');
   track.innerHTML = '';
@@ -991,5 +982,9 @@ function showWinnerModal(){
   $('modal-winner').classList.remove('hidden');
 }
 
+/* ---------------------------------------------------------------------- */
+/* init                                                                    */
+/* ---------------------------------------------------------------------- */
 showScreen('landing');
+
 })();
