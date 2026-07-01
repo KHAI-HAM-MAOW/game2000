@@ -513,9 +513,24 @@ function nextSeatUid(seatOrder, uid){
   return seatOrder[(i+1) % seatOrder.length];
 }
 
+// If table.currentUid points at someone who is no longer in room.players
+// (they left / closed the tab), the game gets stuck forever: nobody's
+// isMyTurn check ever matches. Snap the turn to the first remaining seat.
+function healCurrentUid(room){
+  const table = room.table;
+  if(!table) return;
+  const seatOrder = Object.entries(room.players||{}).sort((a,b)=>a[1].seat-b[1].seat).map(([uid])=>uid);
+  if(table.currentUid !== null && !seatOrder.includes(table.currentUid)){
+    table.currentUid = seatOrder[0] || null;
+    table.passSet = {};
+    table.deadline = Date.now() + CONFIG.turnSeconds*1000;
+  }
+}
+
 // Mutates `room` in place applying a validated play/pass action. Used both
 // inside the Firebase transaction and by the host's timeout watchdog.
 function applyAction(room, action){
+  healCurrentUid(room);
   const seatOrder = Object.entries(room.players).sort((a,b)=>a[1].seat-b[1].seat).map(([uid])=>uid);
   const table = room.table;
   const uid = action.uid;
@@ -528,11 +543,12 @@ function applyAction(room, action){
     table.passSet = table.passSet || {};
     table.passSet[uid] = true;
     const ownerUid = table.lastCombo ? table.lastCombo.ownerUid : null;
+    const ownerStillHere = ownerUid && seatOrder.includes(ownerUid);
     const nxt = nextSeatUid(seatOrder, uid);
-    if(nxt === ownerUid){
+    if(!ownerStillHere || nxt === ownerUid){
       table.lastCombo = null;
       table.freeLead = true;
-      table.currentUid = ownerUid;
+      table.currentUid = ownerStillHere ? ownerUid : nxt;
       table.passSet = {};
     } else {
       table.currentUid = nxt;
@@ -587,6 +603,15 @@ function startHostWatchdog(roomId){
     const snap = await ref.get();
     const room = snap.val();
     if(!room || room.meta.status !== 'playing') return;
+
+    // Fix a stuck turn (currentUid pointing at someone who left) right away,
+    // don't wait for the 20s deadline.
+    const seatOrderNow = Object.entries(room.players||{}).sort((a,b)=>a[1].seat-b[1].seat).map(([uid])=>uid);
+    if(room.table && room.table.currentUid !== null && !seatOrderNow.includes(room.table.currentUid)){
+      await ref.transaction((r)=>{ if(!r) return r; healCurrentUid(r); return r; });
+      return;
+    }
+
     const table = room.table;
     if(!table || !table.deadline || Date.now() < table.deadline) return;
 
@@ -699,7 +724,7 @@ function renderGame(meta){
     statusMsg = table.freeLead ? 'ຮອບຂອງທ່ານ — ລົງໄພ່ນຳກ່ອນ' : 'ຮອບຂອງທ່ານ — ລົງໄພ່ໃຫ້ໃຫຍ່ກວ່າ ຫຼື ກົດຜ່ານ';
   } else if(table){
     const cur = STATE.players[table.currentUid];
-    statusMsg = cur ? `ລໍຖ້າ ${cur.name}...` : '';
+    statusMsg = cur ? `ລໍຖ້າ ${cur.name}...` : 'ກຳລັງແກ້ໄຂຮອບ...';
   }
   $('status-msg').textContent = statusMsg;
   $('btn-pass').disabled = !isMyTurn || (table && table.freeLead);
