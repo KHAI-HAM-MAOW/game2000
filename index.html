@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="lo">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+<title>ໄພ່ລາວ — Lao Card Table</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<!-- ======================= LANDING / LOBBY ======================= -->
+<div id="screen-landing" class="screen">
+  <div style="width:100%; max-width:440px;">
+    <div class="brand">
+      <div class="chip">🀄</div>
+      <h1>ໄພ່ລາວ</h1>
+      <p>ຫຼິ້ນໄພ່ອອນລາຍກັບໝູ່ 2–5 ຄົນ</p>
+    </div>
+
+    <div class="card-panel">
+      <div class="tabs">
+        <button id="tab-create" class="active">ສ້າງຫ້ອງ</button>
+        <button id="tab-join">ເຂົ້າຮ່ວມ</button>
+      </div>
+
+      <div id="err-landing" class="error-msg hidden"></div>
+
+      <div class="field">
+        <label for="input-name">ຊື່ຂອງທ່ານ</label>
+        <input id="input-name" maxlength="16" placeholder="ເຊັ່ນ: ນ້ອງແອັນ" />
+      </div>
+
+      <!-- create panel -->
+      <div id="panel-create">
+        <div class="field">
+          <label>ຈຳນວນຜູ້ຫຼິ້ນ</label>
+          <div class="seat-choice" id="create-seat-choice">
+            <button data-n="2">2</button>
+            <button data-n="3">3</button>
+            <button data-n="4" class="active">4</button>
+            <button data-n="5">5</button>
+          </div>
+        </div>
+        <div class="field">
+          <label for="create-code">ຕັ້ງລະຫັດຫ້ອງ (4 ຕົວເລກ)</label>
+          <input id="create-code" class="code-input" maxlength="4" inputmode="numeric" placeholder="0000" />
+        </div>
+        <button id="btn-create-room" class="btn-primary" style="width:100%;">ສ້າງຫ້ອງ &amp; ລໍຖ້າໝູ່</button>
+      </div>
+
+      <!-- join panel -->
+      <div id="panel-join" class="hidden">
+        <div class="field">
+          <label>ໂໝດຈຳນວນຜູ້ຫຼິ້ນຂອງຫ້ອງ</label>
+          <div class="seat-choice" id="join-seat-choice">
+            <button data-n="2">2</button>
+            <button data-n="3">3</button>
+            <button data-n="4" class="active">4</button>
+            <button data-n="5">5</button>
+          </div>
+        </div>
+        <div class="field">
+          <label for="join-code">ລະຫັດຫ້ອງ (4 ຕົວເລກ)</label>
+          <input id="join-code" class="code-input" maxlength="4" inputmode="numeric" placeholder="0000" />
+        </div>
+        <button id="btn-join-room" class="btn-primary" style="width:100%;">ເຂົ້າຫ້ອງ</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ======================= WAITING ROOM ======================= -->
+<div id="screen-waiting" class="screen hidden">
+  <div style="width:100%; max-width:440px;">
+    <div class="brand">
+      <h1 style="font-size:1.5rem;">ຫ້ອງລໍຖ້າ</h1>
+      <p>ແບ່ງປັນລະຫັດນີ້ໃຫ້ໝູ່ຂອງທ່ານ</p>
+    </div>
+    <div class="card-panel">
+      <div class="room-code-display" id="waiting-code">0000</div>
+      <div id="seat-list" class="seat-list"></div>
+      <div id="waiting-hint" style="text-align:center; font-size:.85rem; opacity:.75; margin-bottom:14px;"></div>
+      <button id="btn-start-game" class="btn-primary hidden" style="width:100%;">ເລີ່ມເກມ</button>
+      <button id="btn-leave-waiting" class="btn-ghost" style="width:100%; margin-top:10px;">ອອກຈາກຫ້ອງ</button>
+    </div>
+  </div>
+</div>
+
+<!-- ======================= GAME TABLE ======================= -->
+<div id="screen-game" class="game-wrap hidden">
+  <div class="topbar">
+    <div class="room-tag" id="game-room-tag">ຫ້ອງ 0000</div>
+    <div class="controls">
+      <button class="icon-btn" id="btn-history">📜 ປະຫວັດ</button>
+      <button class="icon-btn" id="btn-leave-game">ອອກ</button>
+    </div>
+  </div>
+
+  <div class="table-area">
+    <div class="table-oval" id="table-oval">
+      <div class="deck-count" id="deck-count"></div>
+      <div class="center-pile">
+        <div class="last-combo" id="last-combo"></div>
+        <div class="meta" id="last-combo-meta"></div>
+      </div>
+      <!-- opponent seats injected by JS -->
+    </div>
+  </div>
+
+  <div class="hand-dock">
+    <div class="hand-toolbar">
+      <div class="status-msg" id="status-msg">&nbsp;</div>
+      <button id="btn-sort-rank" class="active">ລຽງຕາມເລກ</button>
+      <button id="btn-sort-suit">ລຽງຕາມດອກ</button>
+    </div>
+    <div class="hand-row" id="hand-row"></div>
+    <div class="action-row">
+      <button id="btn-pass" class="btn-ghost">ຜ່ານ (Pass)</button>
+      <button id="btn-play" class="btn-primary">ລົງໄພ່</button>
+    </div>
+  </div>
+</div>
+
+<!-- ======================= MODALS ======================= -->
+<div id="modal-skill-choice" class="overlay hidden">
+  <div class="modal">
+    <h2>ເລືອກແບບການລົງໄພ່</h2>
+    <p style="opacity:.8; margin-top:-8px;">ໄພ່ທີ່ເລືອກສາມາດລົງໄດ້ຫຼາຍແບບ ເລືອກແບບໜຶ່ງ:</p>
+    <div class="options" id="skill-choice-options"></div>
+    <button class="btn-ghost" id="btn-cancel-skill-choice" style="width:100%;">ຍົກເລີກ</button>
+  </div>
+</div>
+
+<div id="modal-winner" class="overlay hidden">
+  <div class="modal">
+    <div class="win-burst">🏆</div>
+    <h2 id="winner-text">ຜູ້ຊະນະ!</h2>
+    <p id="winner-sub" style="opacity:.8;"></p>
+    <button id="btn-play-again" class="btn-primary" style="width:100%; margin-top:10px;">ຫຼິ້ນໃໝ່</button>
+    <button id="btn-back-lobby" class="btn-ghost" style="width:100%; margin-top:10px;">ກັບຄືນໜ້າຫຼັກ</button>
+  </div>
+</div>
+
+<div id="history-drawer" class="history-drawer hidden">
+  <div class="history-sheet">
+    <h3>ປະຫວັດການລົງໄພ່</h3>
+    <div class="history-track" id="history-track"></div>
+    <button class="btn-ghost" id="btn-close-history" style="width:100%; margin-top:12px;">ປິດ</button>
+  </div>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<!-- Firebase SDK (compat, no build step needed) -->
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-database-compat.js"></script>
+<script src="config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
