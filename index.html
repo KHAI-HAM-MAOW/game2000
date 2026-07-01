@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
-<title>ໄພ້ໂກຍ — Lao Card Table</title>
+<title>ໄພ່ລາວ — Lao Card Table</title>
 <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -13,7 +13,7 @@
   <div style="width:100%; max-width:440px;">
     <div class="brand">
       <div class="chip">🀄</div>
-      <h1>...ໄພ້ໂກຍ...</h1>
+      <h1>ໄພ່ລາວ</h1>
       <p>ຫຼິ້ນໄພ່ອອນລາຍກັບໝູ່ 2–5 ຄົນ</p>
     </div>
 
@@ -46,13 +46,12 @@
           <input id="create-code" class="code-input" maxlength="4" inputmode="numeric" placeholder="0000" />
         </div>
         <button id="btn-create-room" class="btn-primary" style="width:100%;">ສ້າງຫ້ອງ &amp; ລໍຖ້າໝູ່</button>
-        <button id="btn-offline-mode" class="btn-ghost" style="width:100%; margin-top:10px;">ຫຼິ້ນ Offline (ກັບບັອດ)</button>
       </div>
 
       <!-- join panel -->
       <div id="panel-join" class="hidden">
         <div class="field">
-          <label>...ໂໝດຈຳນວນຜູ້ຫຼິ້ນຂອງຫ້ອງ...</label>
+          <label>ໂໝດຈຳນວນຜູ້ຫຼິ້ນຂອງຫ້ອງ</label>
           <div class="seat-choice" id="join-seat-choice">
             <button data-n="2">2</button>
             <button data-n="3">3</button>
@@ -87,7 +86,7 @@
   </div>
 </div>
 
-<!-- ======================= GAME SCREEN ======================= -->
+<!-- ======================= GAME TABLE ======================= -->
 <div id="screen-game" class="game-wrap hidden">
   <div class="topbar">
     <div class="room-tag" id="game-room-tag">ຫ້ອງ 0000</div>
@@ -104,6 +103,7 @@
         <div class="last-combo" id="last-combo"></div>
         <div class="meta" id="last-combo-meta"></div>
       </div>
+      <!-- opponent seats injected by JS -->
     </div>
   </div>
 
@@ -116,12 +116,12 @@
     <div class="hand-row" id="hand-row"></div>
     <div class="action-row">
       <button id="btn-pass" class="btn-ghost">ຜ່ານ (Pass)</button>
-      <button id="btn-play" class="btn-primary">...ລົງໄພ່...</button>
+      <button id="btn-play" class="btn-primary">ລົງໄພ່</button>
     </div>
   </div>
 </div>
 
-<!-- ======================= MODALS & OVERLAYS ======================= -->
+<!-- ======================= MODALS ======================= -->
 <div id="modal-skill-choice" class="overlay hidden">
   <div class="modal">
     <h2>ເລືອກແບບການລົງໄພ່</h2>
@@ -151,7 +151,7 @@
 
 <div id="toast" class="toast"></div>
 
-<!-- Firebase SDK -->
+<!-- Firebase SDK (compat, no build step needed) -->
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-database-compat.js"></script>
 <script src="config.js"></script>
