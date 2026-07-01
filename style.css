@@ -209,7 +209,7 @@ button:focus-visible, input:focus-visible, select:focus-visible{
   position:relative;
   width:min(880px, 96vw);
   aspect-ratio: 16/10;
-  max-height: 56vh;
+  max-height: 62vh;
   border-radius: 50% / 44%;
   background:
     radial-gradient(ellipse at 50% 40%, #1a6b4c 0%, var(--felt) 55%, var(--felt-deep) 100%);
@@ -220,17 +220,24 @@ button:focus-visible, input:focus-visible, select:focus-visible{
     0 20px 40px rgba(0,0,0,.5);
 }
 
+/* your own discard pile — sits front-and-center, closest to your hand,
+   same as everyone else's pile sits in front of their own seat */
 .center-pile{
-  position:absolute; left:50%; top:50%; transform: translate(-50%,-50%);
+  position:absolute; left:50%; top:76%; transform: translate(-50%,-50%);
   display:flex; flex-direction:column; align-items:center; gap:6px;
   min-width: 160px;
+  cursor:pointer;
+  padding: 8px; border-radius: 16px;
+  transition: box-shadow .15s ease;
 }
+.center-pile:hover{ box-shadow: 0 0 0 2px rgba(232,184,75,.3); }
+.center-pile.active-pile{ box-shadow: 0 0 0 3px var(--gold), 0 0 22px rgba(232,184,75,.45); }
 .center-pile .last-combo{
-  display:flex; gap:6px; min-height:74px; align-items:center; justify-content:center;
+  display:flex; gap:6px; min-height:132px; align-items:center; justify-content:center;
 }
 .center-pile .meta{
-  font-size:.75rem; color: var(--gold-soft); background: rgba(0,0,0,.35);
-  padding:3px 10px; border-radius: 8px; font-weight:700;
+  font-size:.85rem; color: var(--gold-soft); background: rgba(0,0,0,.35);
+  padding:4px 12px; border-radius: 8px; font-weight:700;
 }
 .deck-count{
   position:absolute; left:50%; top:14%; transform:translateX(-50%);
@@ -241,7 +248,7 @@ button:focus-visible, input:focus-visible, select:focus-visible{
 .seat{
   position:absolute;
   display:flex; flex-direction:column; align-items:center; gap:4px;
-  width: 108px;
+  width: 150px;
 }
 .seat .avatar{
   width:52px;height:52px;border-radius:50%;
@@ -277,17 +284,31 @@ button:focus-visible, input:focus-visible, select:focus-visible{
 }
 .seat .oppo-cards .backcard:first-child{ margin-left:0; }
 
+/* each player's own discard pile, shown in front of their seat — piles
+   never merge between players, and clicking one opens that player's
+   play history */
+.seat-pile{
+  display:flex; justify-content:center; margin-top:6px; cursor:pointer;
+  min-height: 40px; padding: 3px; border-radius: 12px;
+  transition: box-shadow .15s ease;
+}
+.seat-pile:hover{ box-shadow: 0 0 0 2px rgba(232,184,75,.3); }
+.seat-pile .pcard{ margin-left:-40px; }
+.seat-pile .pcard:first-child{ margin-left:0; }
+.seat-pile.empty{ min-height: 18px; }
+.seat-pile.active-pile{ box-shadow: 0 0 0 3px var(--gold), 0 0 16px rgba(232,184,75,.4); }
+
 /* seat positions set inline via JS using --x/--y percentages */
 
 /* ---------------- Playing card ---------------- */
 .pcard{
-  --w: 56px; --h: 80px;
+  --w: 112px; --h: 160px;
   width: var(--w); height: var(--h);
   background: var(--cream);
-  border-radius: 8px;
-  box-shadow: 0 3px 6px rgba(0,0,0,.35);
+  border-radius: 14px;
+  box-shadow: 0 5px 10px rgba(0,0,0,.35);
   display:flex; flex-direction:column; justify-content:space-between;
-  padding: 5px 6px;
+  padding: 9px 11px;
   font-family:'Baloo 2',sans-serif;
   font-weight:700;
   user-select:none;
@@ -296,19 +317,19 @@ button:focus-visible, input:focus-visible, select:focus-visible{
 }
 .pcard.red{ color: var(--red-suit); }
 .pcard.black{ color: var(--ink); }
-.pcard .corner{ font-size: .95rem; line-height:1; }
+.pcard .corner{ font-size: 1.7rem; line-height:1; }
 .pcard .corner.bottom{ align-self:flex-end; transform: rotate(180deg); }
 .pcard .pip{
   position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
-  font-size:1.5rem;
+  font-size:2.8rem;
 }
-.pcard.small{ --w:44px; --h:64px; }
-.pcard.small .corner{ font-size:.72rem; }
-.pcard.small .pip{ font-size:1.1rem; }
+.pcard.small{ --w:88px; --h:128px; }
+.pcard.small .corner{ font-size:1.3rem; }
+.pcard.small .pip{ font-size:2.1rem; }
 
-.pcard.mini{ --w:26px; --h:37px; box-shadow:0 2px 4px rgba(0,0,0,.3); }
-.pcard.mini .corner{ font-size:.5rem; }
-.pcard.mini .pip{ font-size:.7rem; }
+.pcard.mini{ --w:52px; --h:74px; box-shadow:0 3px 6px rgba(0,0,0,.3); }
+.pcard.mini .corner{ font-size:.95rem; }
+.pcard.mini .pip{ font-size:1.3rem; }
 
 .pcard.dealt-anim{
   animation: dealArc .5s cubic-bezier(.2,.8,.3,1) both;
@@ -339,15 +360,15 @@ button:focus-visible, input:focus-visible, select:focus-visible{
 .hand-toolbar button.active{ background: var(--gold); color:#3A2A08; }
 
 .hand-row{
-  display:flex; justify-content:center;
-  padding: 6px 0 4px;
-  min-height: 96px;
+  display:flex; justify-content:center; flex-wrap: wrap;
+  padding: 10px 0 6px;
+  min-height: 176px;
 }
-.hand-row .pcard{ margin-left:-20px; cursor:pointer; }
+.hand-row .pcard{ margin-left:-42px; cursor:pointer; }
 .hand-row .pcard:first-child{ margin-left:0; }
-.hand-row .pcard.selected{ transform: translateY(-16px); box-shadow: 0 0 0 3px var(--gold), 0 8px 14px rgba(0,0,0,.4); }
-.hand-row .pcard:hover{ transform: translateY(-8px); }
-.hand-row .pcard.selected:hover{ transform: translateY(-16px); }
+.hand-row .pcard.selected{ transform: translateY(-24px); box-shadow: 0 0 0 4px var(--gold), 0 10px 18px rgba(0,0,0,.4); }
+.hand-row .pcard:hover{ transform: translateY(-12px); }
+.hand-row .pcard.selected:hover{ transform: translateY(-24px); }
 
 .action-row{
   display:flex; justify-content:center; gap:12px; padding-bottom: 10px;
@@ -371,7 +392,7 @@ button:focus-visible, input:focus-visible, select:focus-visible{
   display:flex; flex-direction:column; align-items:center; gap:6px; min-width:110px;
 }
 .history-set .cards{ display:flex; }
-.history-set .cards .pcard{ margin-left:-14px; }
+.history-set .cards .pcard{ margin-left:-28px; }
 .history-set .cards .pcard:first-child{ margin-left:0; }
 .history-set .who{ font-size:.72rem; color: var(--gold-soft); font-weight:700; }
 
@@ -412,10 +433,13 @@ button:focus-visible, input:focus-visible, select:focus-visible{
 
 /* ---------------- Responsive ---------------- */
 @media (max-width: 620px){
-  .table-oval{ max-height: 42vh; }
-  .seat{ width:80px; }
+  .table-oval{ max-height: 48vh; }
+  .seat{ width:112px; }
   .seat .avatar{ width:40px;height:40px; font-size:1rem; }
-  .pcard{ --w:46px; --h:66px; }
+  .pcard{ --w:92px; --h:132px; }
+  .pcard.small{ --w:66px; --h:96px; }
+  .seat-pile .pcard{ margin-left:-30px; }
+  .hand-row .pcard{ margin-left:-32px; }
   .action-row button{ min-width:100px; padding:11px 14px; font-size:.9rem; }
 }
 
