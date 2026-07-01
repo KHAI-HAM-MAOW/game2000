@@ -332,8 +332,9 @@ $('btn-join-room').onclick = async ()=>{
     if(players[MY_UID]){ STATE.myName = players[MY_UID].name; enterRoom(roomId, players[MY_UID].seat===0); return; }
     const seatsTaken = Object.values(players).map(p=>p.seat);
     if(seatsTaken.length >= val.meta.maxPlayers) return landingError('ຫ້ອງເຕັມແລ້ວ');
-    let seat = 0;
-    while(seatsTaken.includes(seat)) seat++;
+    const availableSeats = [];
+    for(let s=0; s<val.meta.maxPlayers; s++) if(!seatsTaken.includes(s)) availableSeats.push(s);
+    const seat = availableSeats[Math.floor(Math.random()*availableSeats.length)];
     await ref.child('players/'+MY_UID).set({ name, seat });
     STATE.myName = name;
     enterRoom(roomId, seat===0);
@@ -465,9 +466,15 @@ async function hostStartGame(roomId){
     for(const uid of seatOrder){ if(findQuadInHand(hands[uid])){ autoWinnerUid = uid; break; } }
   }
 
+  // whoever won the previous round leads the new one; if there was no
+  // previous winner (first-ever deal) or they've since left the room,
+  // leave the lead open so the table settles it on the first play
+  const prevWinnerUid = val.winnerUid;
+  const startUid = (prevWinnerUid && seatOrder.includes(prevWinnerUid)) ? prevWinnerUid : null;
+
   const table = {
     lastCombo: null,
-    currentUid: null,
+    currentUid: startUid,
     freeLead: true,
     deadline: Date.now() + CONFIG.turnSeconds*1000,
     passSet: {},
@@ -513,6 +520,20 @@ function nextSeatUid(seatOrder, uid){
   return seatOrder[(i+1) % seatOrder.length];
 }
 
+// Like nextSeatUid, but skips any seat that has already passed on the
+// current trick (table.passSet) — those players stay auto-skipped until
+// the trick resets (house rule: pass once, sit out until next lead).
+function nextUnpassedUid(seatOrder, fromUid, passSet){
+  const ps = passSet || {};
+  let i = seatOrder.indexOf(fromUid);
+  for(let step=0; step<seatOrder.length; step++){
+    i = (i+1) % seatOrder.length;
+    const cand = seatOrder[i];
+    if(!ps[cand]) return cand;
+  }
+  return fromUid;
+}
+
 // If table.currentUid points at someone who is no longer in room.players
 // (they left / closed the tab), the game gets stuck forever: nobody's
 // isMyTurn check ever matches. Snap the turn to the first remaining seat.
@@ -544,8 +565,10 @@ function applyAction(room, action){
     table.passSet[uid] = true;
     const ownerUid = table.lastCombo ? table.lastCombo.ownerUid : null;
     const ownerStillHere = ownerUid && seatOrder.includes(ownerUid);
-    const nxt = nextSeatUid(seatOrder, uid);
-    if(!ownerStillHere || nxt === ownerUid){
+    // skip anyone who already passed this trick — it ends the instant
+    // only the current combo's owner (or nobody) is left unpassed
+    const nxt = nextUnpassedUid(seatOrder, uid, table.passSet);
+    if(!ownerStillHere || nxt === ownerUid || nxt === uid){
       table.lastCombo = null;
       table.freeLead = true;
       table.currentUid = ownerStillHere ? ownerUid : nxt;
@@ -588,8 +611,20 @@ function applyAction(room, action){
 
     table.lastCombo = { type: combo.type, len: combo.len, highVal: combo.highVal, cards, ownerUid: uid };
     table.freeLead = false;
-    table.passSet = {};
-    table.currentUid = nextSeatUid(seatOrder, uid);
+    // passSet carries over within the same trick — anyone who already
+    // passed stays skipped until the trick resets (auto-pass house rule)
+    table.passSet = table.passSet || {};
+    delete table.passSet[uid];
+    const nxt = nextUnpassedUid(seatOrder, uid, table.passSet);
+    if(nxt === uid){
+      // everyone else has already passed this trick — lead a fresh one
+      table.lastCombo = null;
+      table.freeLead = true;
+      table.currentUid = uid;
+      table.passSet = {};
+    } else {
+      table.currentUid = nxt;
+    }
     table.deadline = Date.now() + CONFIG.turnSeconds*1000;
   }
 }
@@ -668,6 +703,22 @@ function cardEl(cardStr, opts={}){
   return div;
 }
 
+// Most recent combo a given player has put down (used to render their own
+// discard pile in front of their seat — piles never merge between players).
+function lastPlayForUid(uid){
+  let best = null;
+  for(const h of STATE.history){
+    if(h.uid !== uid) continue;
+    if(!best || h.ts > best.ts) best = h;
+  }
+  return best;
+}
+
+// clicking your own pile (front-and-center) opens your play history
+$('last-combo').parentElement.style.cursor = 'pointer';
+$('last-combo').parentElement.title = 'ເບິ່ງປະຫວັດການລົງໄພ່ຂອງທ່ານ';
+$('last-combo').parentElement.onclick = ()=> openHistoryDrawer(MY_UID);
+
 function renderGame(meta){
   $('game-room-tag').textContent = 'ຫ້ອງ ' + meta.code;
   const table = STATE.table;
@@ -696,6 +747,19 @@ function renderGame(meta){
       <div class="hand-count">🂠 × <span data-count>${count}</span></div>
       ${passed ? '<div class="passed-tag">ຜ່ານ</div>' : ''}
     `;
+
+    // each player gets their own discard pile in front of their seat —
+    // it only ever shows cards that player themself put down, and is
+    // clickable to open that player's full play history
+    const isActivePile = !!(table && table.lastCombo && table.lastCombo.ownerUid === uid);
+    const lastPlay = lastPlayForUid(uid);
+    const pileWrap = document.createElement('div');
+    pileWrap.className = 'seat-pile' + (isActivePile ? ' active-pile' : '') + (lastPlay ? '' : ' empty');
+    if(lastPlay) lastPlay.cards.forEach(c=>pileWrap.appendChild(cardEl(c, {size:'small'})));
+    pileWrap.title = 'ເບິ່ງປະຫວັດການລົງໄພ່';
+    pileWrap.onclick = ()=> openHistoryDrawer(uid);
+    seatDiv.appendChild(pileWrap);
+
     oval.appendChild(seatDiv);
   });
 
@@ -703,16 +767,18 @@ function renderGame(meta){
   // directly (hands are per-uid) — fetch counts on demand:
   refreshOpponentCounts();
 
-  // ---- center pile ----
-  const lastComboEl = $('last-combo');
-  lastComboEl.innerHTML = '';
-  const metaEl = $('last-combo-meta');
-  if(table && table.lastCombo){
-    table.lastCombo.cards.forEach(c=>lastComboEl.appendChild(cardEl(c, {size:'small'})));
-    const ownerName = (STATE.players[table.lastCombo.ownerUid]||{}).name || '';
-    metaEl.textContent = `${comboLabel(table.lastCombo.type)} • ${ownerName}`;
+  // ---- your own pile (front-and-center, in front of your seat) ----
+  const myPileEl = $('last-combo');
+  myPileEl.innerHTML = '';
+  const myPileMeta = $('last-combo-meta');
+  const myLastPlay = lastPlayForUid(MY_UID);
+  const myPileIsActive = !!(table && table.lastCombo && table.lastCombo.ownerUid === MY_UID);
+  myPileEl.parentElement.classList.toggle('active-pile', myPileIsActive);
+  if(myLastPlay){
+    myLastPlay.cards.forEach(c=>myPileEl.appendChild(cardEl(c, {size:'small'})));
+    myPileMeta.textContent = `ໄພ່ຂອງທ່ານ • ${comboLabel(myLastPlay.type)}`;
   } else {
-    metaEl.textContent = table && table.freeLead ? 'ຮອບໃໝ່ — ລົງໄພ່ຫຍັງກໍໄດ້' : '';
+    myPileMeta.textContent = (table && table.freeLead && table.currentUid===MY_UID) ? 'ຮອບໃໝ່ — ລົງໄພ່ຫຍັງກໍໄດ້' : 'ໄພ່ຂອງທ່ານ';
   }
   $('deck-count').textContent = table ? `ໄພ່ໃນກອງ: ${table.deckRemaining ?? 0}` : '';
 
@@ -847,10 +913,19 @@ $('btn-cancel-skill-choice').onclick = closeSkillChoiceModal;
 /* ---------------------------------------------------------------------- */
 /* 11. History drawer                                                     */
 /* ---------------------------------------------------------------------- */
-$('btn-history').onclick = ()=>{
+// filterUid: null shows everyone's history (top toolbar button); a uid
+// shows only that player's plays (clicking their pile at the table)
+function openHistoryDrawer(filterUid){
   const track = $('history-track');
   track.innerHTML = '';
-  const items = STATE.history.slice().sort((a,b)=>a.ts-b.ts);
+  let items = STATE.history.slice().sort((a,b)=>a.ts-b.ts);
+  if(filterUid) items = items.filter(h=>h.uid===filterUid);
+  const titleEl = document.querySelector('#history-drawer h3');
+  if(titleEl){
+    titleEl.textContent = filterUid
+      ? `ປະຫວັດການລົງໄພ່ — ${filterUid===MY_UID ? 'ທ່ານ' : ((STATE.players[filterUid]||{}).name || '?')}`
+      : 'ປະຫວັດການລົງໄພ່';
+  }
   if(!items.length) track.innerHTML = '<p style="opacity:.6;">ຍັງບໍ່ມີການລົງໄພ່</p>';
   items.forEach(h=>{
     const set = document.createElement('div');
@@ -866,7 +941,8 @@ $('btn-history').onclick = ()=>{
     track.appendChild(set);
   });
   $('history-drawer').classList.remove('hidden');
-};
+}
+$('btn-history').onclick = ()=> openHistoryDrawer(null);
 $('btn-close-history').onclick = ()=> $('history-drawer').classList.add('hidden');
 
 /* ---------------------------------------------------------------------- */
