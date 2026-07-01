@@ -14,7 +14,7 @@
     <div class="brand">
       <div class="chip">🀄</div>
       <h1>ໄພ້ໂກຍ</h1>
-      <p>ຫຼິ້ນໄພ່ອອນລາຍ ຫຼື ອອບລາຍ (Jail Theme)</p>
+      <p style="color: #333; font-weight: bold;">ຫຼິ້ນໄພ່ອອນລາຍ ຫຼື ອອບລາຍ</p>
     </div>
 
     <div class="card-panel prison-theme">
@@ -66,7 +66,7 @@
         </div>
         <button id="btn-join-room" class="btn-primary" style="width:100%;">ເຂົ້າຫ້ອງຄຸມຂັງ</button>
       </div>
-
+      
       <!-- offline panel -->
       <div id="panel-offline" class="hidden">
          <div class="field">
@@ -82,4 +82,92 @@
     </div>
   </div>
 </div>
-<!-- ສ່ວນອື່ນໆຄົງເດີມ... (Waiting Room, Game Table) -->
+
+<!-- ======================= WAITING ROOM ======================= -->
+<div id="screen-waiting" class="screen hidden">
+  <div style="width:100%; max-width:440px;">
+    <div class="brand">
+      <h1 style="font-size:1.5rem; color:#111;">ຫ້ອງລໍຖ້າການຕັດສິນ</h1>
+      <p style="color:#333;">ແບ່ງປັນລະຫັດນີ້ໃຫ້ໝູ່ຂອງທ່ານ</p>
+    </div>
+    <div class="card-panel prison-theme">
+      <div class="room-code-display" id="waiting-code">0000</div>
+      <div id="seat-list" class="seat-list"></div>
+      <div id="waiting-hint" style="text-align:center; font-size:.85rem; opacity:.75; margin-bottom:14px; color:#fff;"></div>
+      <button id="btn-start-game" class="btn-primary hidden" style="width:100%;">ເລີ່ມເກມ</button>
+      <button id="btn-leave-waiting" class="btn-ghost" style="width:100%; margin-top:10px;">ອອກຈາກຫ້ອງ</button>
+    </div>
+  </div>
+</div>
+
+<!-- ======================= GAME TABLE ======================= -->
+<div id="screen-game" class="game-wrap hidden">
+  <div class="topbar">
+    <div class="room-tag" id="game-room-tag">ຫ້ອງ 0000</div>
+    <div class="controls">
+      <button class="icon-btn" id="btn-history">📜 ປະຫວັດ</button>
+      <button class="icon-btn" id="btn-leave-game">ອອກ</button>
+    </div>
+  </div>
+
+  <div class="table-area">
+    <div class="table-oval" id="table-oval">
+      <div class="deck-count" id="deck-count"></div>
+      <div class="center-pile">
+        <div class="last-combo" id="last-combo"></div>
+        <div class="meta" id="last-combo-meta"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="hand-dock">
+    <div class="hand-toolbar">
+      <div class="status-msg" id="status-msg">&nbsp;</div>
+      <button id="btn-sort-rank" class="active">ລຽງຕາມເລກ</button>
+      <button id="btn-sort-suit">ລຽງຕາມດອກ</button>
+    </div>
+    <div class="hand-row" id="hand-row"></div>
+    <div class="action-row">
+      <button id="btn-pass" class="btn-ghost" style="background:#1F2937;">ຜ່ານ (Pass)</button>
+      <button id="btn-play" class="btn-primary">ລົງໄພ່</button>
+    </div>
+  </div>
+</div>
+
+<!-- ======================= MODALS ======================= -->
+<div id="modal-skill-choice" class="overlay hidden">
+  <div class="modal prison-theme">
+    <h2 style="color:#fff;">ເລືອກແບບການລົງໄພ່</h2>
+    <p style="opacity:.8; margin-top:-8px;">ໄພ່ທີ່ເລືອກສາມາດລົງໄດ້ຫຼາຍແບບ ເລືອກແບບໜຶ່ງ:</p>
+    <div class="options" id="skill-choice-options"></div>
+    <button class="btn-ghost" id="btn-cancel-skill-choice" style="width:100%;">ຍົກເລີກ</button>
+  </div>
+</div>
+
+<div id="modal-winner" class="overlay hidden">
+  <div class="modal prison-theme">
+    <div class="win-burst">🏆</div>
+    <h2 id="winner-text" style="color:#fff;">ຜູ້ຊະນະ!</h2>
+    <p id="winner-sub" style="opacity:.8;"></p>
+    <button id="btn-play-again" class="btn-primary" style="width:100%; margin-top:10px;">ຫຼິ້ນໃໝ່</button>
+    <button id="btn-back-lobby" class="btn-ghost" style="width:100%; margin-top:10px;">ກັບຄືນໜ້າຫຼັກ</button>
+  </div>
+</div>
+
+<div id="history-drawer" class="history-drawer hidden">
+  <div class="history-sheet prison-theme">
+    <h3 style="color:#fff;">ປະຫວັດການລົງໄພ່</h3>
+    <div class="history-track" id="history-track"></div>
+    <button class="btn-ghost" id="btn-close-history" style="width:100%; margin-top:12px;">ປິດ</button>
+  </div>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-database-compat.js"></script>
+<script src="config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
