@@ -1,62 +1,160 @@
-/* ເພີ່ມການຕັ້ງຄ່າສີໃໝ່ */
-:root{
+@import url('https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&family=Noto+Sans+Lao:wght@400;500;600;700&family=Noto+Sans:wght@400;500;600;700&display=swap');
+
+:root {
   --wood: #8B5A2B;
   --wood-dark: #5C3A21;
-  --concrete: #F2F4F7;
+  --concrete-light: #E5E7EB;
+  --concrete-mid: #D1D5DB;
+  --concrete-dark: #9CA3AF;
   --prison-bar: #0B3C5D;
-  /* ... ສີອື່ນໆຄົງເດີມ ... */
+  --gold: #E8B84B;
+  --gold-soft: #F4D888;
+  --cream: #FFF9EE;
+  --ink: #111827;
+  --red-suit: #C0392B;
+  --line: rgba(232,184,75,0.25);
+  --shadow: 0 10px 30px rgba(0,0,0,0.45);
+  font-size: 16px;
 }
 
-/* ພື້ນຫຼັງຄອນກີດສີເທົາ */
-html, body{
+* { box-sizing: border-box; }
+
+html, body {
   margin:0; padding:0; height:100%;
-  background: radial-gradient(circle at 50% 50%, var(--concrete) 0%, #D1D5DB 60%, #9CA3AF 100%);
+  /* ພື້ນຫຼັງສີຄອນກີດສີເທົາ */
+  background: radial-gradient(ellipse at 50% 50%, var(--concrete-light) 0%, var(--concrete-mid) 60%, var(--concrete-dark) 100%);
   color: var(--ink);
   font-family: 'Noto Sans Lao','Noto Sans', sans-serif;
   overflow-x: hidden;
 }
 
-/* Theme ຫ້ອງຂັງສຳລັບໜ້າຫຼັກ */
+h1,h2,h3, .display { font-family: 'Baloo 2','Noto Sans Lao', sans-serif; letter-spacing: 0.2px; }
+button { font-family: inherit; cursor: pointer; border: none; border-radius: 14px; transition: transform .12s ease; }
+button:active { transform: translateY(1px) scale(0.98); }
+button:disabled { opacity:.45; cursor:not-allowed; filter:grayscale(.3); }
+
+.btn-primary { background: linear-gradient(180deg, var(--gold-soft), var(--gold)); color: #3A2A08; font-weight: 700; padding: 14px 22px; font-size: 1.05rem; box-shadow: 0 6px 0 #a9791f, 0 10px 18px rgba(0,0,0,.35); }
+.btn-ghost { background: rgba(255,255,255,0.1); color: #fff; border: 1px solid var(--line); padding: 12px 18px; font-weight: 600; }
+
+.screen { min-height: 100dvh; display:flex; align-items:center; justify-content:center; padding: 24px 16px; }
+.hidden { display:none !important; }
+.brand { text-align:center; margin-bottom: 26px; }
+.brand .chip { display:inline-flex; align-items:center; justify-content:center; width:64px;height:64px;border-radius:50%; background: radial-gradient(circle at 35% 30%, var(--gold-soft), var(--gold) 60%); box-shadow: 0 6px 14px rgba(0,0,0,.4); font-size: 28px; margin-bottom: 10px; }
+.brand h1 { font-size: 2.2rem; margin: 4px 0 2px; font-weight: 800; color: #111; text-shadow: 0 2px 0 rgba(255,255,255,0.8); }
+
+/* Theme ຫ້ອງຂັງ */
 .prison-theme {
-  background: repeating-linear-gradient(
-    90deg,
-    #1F2937,
-    #1F2937 20px,
-    var(--prison-bar) 20px,
-    var(--prison-bar) 25px
-  ) !important;
+  background: repeating-linear-gradient(90deg, #1F2937, #1F2937 20px, var(--prison-bar) 20px, var(--prison-bar) 25px) !important;
   border: 4px solid #4B5563;
-  box-shadow: inset 0 0 40px rgba(0,0,0,0.8), 0 10px 30px rgba(0,0,0,0.45) !important;
+  box-shadow: inset 0 0 40px rgba(0,0,0,0.8), var(--shadow) !important;
   color: #fff;
+  border-radius: 22px;
+  padding: 26px;
 }
-.prison-theme label { color: #E5E7EB; }
-.prison-theme input { background: rgba(255,255,255,0.9) !important; color: #111827 !important; }
+.prison-theme label { display:block; font-size:.85rem; margin-bottom:6px; font-weight:600; color: #E5E7EB; }
+.prison-theme input { width:100%; padding: 12px 14px; border-radius:12px; border:1px solid #4B5563; background: rgba(255,255,255,0.95); color: #111; font-size:1rem; font-family:inherit; }
+.code-input { letter-spacing: 10px; text-align:center; font-size:1.4rem; font-weight:700; font-family: 'Baloo 2', monospace; }
+
+.tabs { display:flex; gap:8px; background: rgba(0,0,0,.4); padding:5px; border-radius: 14px; margin-bottom:20px; }
+.tabs button { flex:1; padding:10px; border-radius:10px; background:transparent; color: rgba(255,255,255,.6); font-weight:700; }
+.tabs button.active { background: var(--gold); color:#3A2A08; }
+.seat-choice { display:grid; grid-template-columns: repeat(4,1fr); gap:8px; margin-bottom:16px; }
+.seat-choice button { padding:10px 0; background: rgba(0,0,0,.4); color: #fff; border:1px solid #4B5563; font-weight:700; }
+.seat-choice button.active { background: var(--gold); color:#3A2A08; border-color: var(--gold); }
+.error-msg { background: rgba(192,57,43,0.8); color:#fff; padding:10px 12px; border-radius:10px; font-size:.9rem; margin-bottom:14px; }
+.room-code-display { display:flex; align-items:center; justify-content:center; background: var(--gold); color:#3A2A08; border-radius:16px; padding:14px; margin: 6px 0 18px; font-weight:800; font-size:1.8rem; letter-spacing:6px; box-shadow: inset 0 0 0 4px rgba(255,255,255,.35); }
+.seat-list { display:flex; flex-direction:column; gap:8px; margin-bottom:18px; }
+.seat-row { display:flex; align-items:center; gap:10px; background: rgba(0,0,0,.4); border-radius:12px; padding:10px 14px; }
+.seat-row .dot { width:10px;height:10px;border-radius:50%; background:#4a4a4a; }
+.seat-row.filled .dot { background: #6FCF97; }
 
 /* ໂຕະໄພ້ຮູບສີ່ຫຼ່ຽມມົນລາຍໄມ້ */
-.table-oval{
+.game-wrap { min-height: 100dvh; display:flex; flex-direction:column; padding: 10px 10px 0; }
+.topbar { display:flex; align-items:center; justify-content:space-between; padding: 6px 8px 10px; gap: 10px; }
+.topbar .room-tag, .icon-btn { background: #1F2937; color: #fff; padding: 6px 12px; border-radius: 10px; font-size:.85rem; font-weight:600; border: none; }
+.table-area { position:relative; flex:1; display:flex; align-items:center; justify-content:center; padding: 6px 6px 0; }
+.table-oval {
   position:relative;
   width:min(880px, 96vw);
-  aspect-ratio: 4/3; /* ປັບເປັນສັດສ່ວນສີ່ຫຼ່ຽມ 4:3 */
+  aspect-ratio: 4/3; /* ສີ່ຫຼ່ຽມ 4:3 */
   max-height: 65vh;
   border-radius: 24px; /* ມຸມໂຄ້ງມົນ */
-  background: 
-    repeating-linear-gradient(45deg, rgba(0,0,0,0.05) 0px, rgba(0,0,0,0.05) 2px, transparent 2px, transparent 4px),
-    var(--wood); /* ໜ້າໂຕະສີໄມ້ */
+  background: repeating-linear-gradient(45deg, rgba(0,0,0,0.05) 0px, rgba(0,0,0,0.05) 2px, transparent 2px, transparent 4px), var(--wood);
   border: 12px solid var(--wood-dark);
-  box-shadow:
-    0 0 0 4px #2c1a0e,
-    inset 0 0 60px rgba(0,0,0,.6),
-    0 20px 40px rgba(0,0,0,.5);
+  box-shadow: 0 0 0 4px #2c1a0e, inset 0 0 60px rgba(0,0,0,.6), 0 20px 40px rgba(0,0,0,.5);
 }
 
-/* ເພີ່ມໂຕບອກຈຳນວນໄພ້ທີ່ເຫຼືອໃນກອງ ຖ້າລົງຫຼາຍກວ່າ 3 ໃບ */
-.more-cards-tag {
-  background: var(--prison-bar);
-  color: white;
-  font-size: 0.7rem;
-  padding: 2px 6px;
-  border-radius: 6px;
+.center-pile { position:absolute; left:50%; top:76%; transform: translate(-50%,-50%); display:flex; flex-direction:column; align-items:center; gap:6px; min-width: 160px; cursor:pointer; padding: 8px; border-radius: 16px; }
+.center-pile.active-pile { box-shadow: 0 0 0 3px var(--gold), 0 0 22px rgba(232,184,75,.6); background: rgba(0,0,0,0.2); }
+#last-combo { position: relative; display:flex; gap:6px; min-height:132px; align-items:center; justify-content:center; }
+.deck-count { position:absolute; left:50%; top:14%; transform:translateX(-50%); font-size:.75rem; color: #fff; background:#1F2937; padding: 4px 10px; border-radius: 8px; font-weight: bold; }
+.meta { font-size:.85rem; color: #fff; background: #1F2937; padding:4px 12px; border-radius: 8px; font-weight:700; }
+
+.seat { position:absolute; display:flex; flex-direction:column; align-items:center; gap:4px; width: 150px; }
+.seat .avatar { width:52px;height:52px;border-radius:50%; background: #1F2937; border:2px solid var(--line); display:flex; align-items:center; justify-content:center; font-weight:800; font-size:1.2rem; color: #fff; }
+.seat.turn .avatar { border-color: var(--gold); box-shadow: 0 0 0 4px rgba(232,184,75,.4); }
+.seat .name { font-size:.78rem; font-weight:700; background: #1F2937; color:#fff; padding: 2px 10px; border-radius: 8px; }
+.seat .hand-count { font-size:.75rem; color: #fff; background: rgba(0,0,0,0.6); padding:2px 6px; border-radius: 4px; font-weight:700; }
+.seat-pile { display:flex; justify-content:center; margin-top:6px; cursor:pointer; min-height: 40px; padding: 3px; border-radius: 12px; position: relative; }
+.seat-pile .pcard { margin-left:-40px; }
+.seat-pile .pcard:first-child { margin-left:0; }
+.seat-pile.active-pile { box-shadow: 0 0 0 3px var(--gold); background: rgba(0,0,0,0.2); }
+
+/* Tag ບອກຈຳນວນໄພ້ທີ່ເຫຼືອ */
+.more-cards-badge {
   position: absolute;
-  right: -10px;
-  top: -10px;
+  top: -8px;
+  right: -15px;
+  background: var(--prison-bar);
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: bold;
+  padding: 2px 6px;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.5);
+  z-index: 10;
+}
+
+.pcard { --w: 112px; --h: 160px; width: var(--w); height: var(--h); background: var(--cream); border-radius: 14px; box-shadow: 0 5px 10px rgba(0,0,0,.35); display:flex; flex-direction:column; justify-content:space-between; padding: 9px 11px; font-family:'Baloo 2',sans-serif; font-weight:700; user-select:none; position:relative; }
+.pcard.red { color: var(--red-suit); }
+.pcard.black { color: #111; }
+.pcard .corner { font-size: 1.7rem; line-height:1; }
+.pcard .corner.bottom { align-self:flex-end; transform: rotate(180deg); }
+.pcard .pip { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); font-size:2.8rem; }
+.pcard.small { --w:88px; --h:128px; }
+.pcard.small .corner { font-size:1.3rem; }
+.pcard.small .pip { font-size:2.1rem; }
+
+.hand-dock { padding: 10px 8px 14px; }
+.hand-toolbar { display:flex; align-items:center; justify-content:center; gap:8px; margin-bottom: 8px; flex-wrap: wrap; }
+.hand-toolbar .status-msg { background: #1F2937; color: #fff; padding: 4px 12px; border-radius: 8px; font-size:.9rem; font-weight:700; }
+.hand-toolbar button { background: #1F2937; color: #fff; padding: 8px 14px; font-size:.82rem; font-weight:700; border-radius:10px; border:none; }
+.hand-toolbar button.active { background: var(--gold); color:#3A2A08; }
+.hand-row { display:flex; justify-content:center; flex-wrap: wrap; padding: 10px 0 6px; min-height: 176px; }
+.hand-row .pcard { margin-left:-42px; cursor:pointer; }
+.hand-row .pcard:first-child { margin-left:0; }
+.hand-row .pcard.selected { transform: translateY(-24px); box-shadow: 0 0 0 4px var(--gold), 0 10px 18px rgba(0,0,0,.4); }
+
+.action-row { display:flex; justify-content:center; gap:12px; padding-bottom: 10px; }
+.action-row button { min-width:120px; padding: 13px 20px; font-size:1rem; font-weight:800; }
+
+.overlay { position:fixed; inset:0; background: rgba(0,0,0,.7); display:flex; align-items:center; justify-content:center; z-index:60; padding: 20px; }
+.history-drawer { position:fixed; inset:0; background: rgba(0,0,0,.6); display:flex; align-items:flex-end; justify-content:center; z-index:50; }
+.history-sheet { width:100%; max-width:720px; max-height:70vh; overflow-y:auto; border-radius: 20px 20px 0 0; border-bottom:none; }
+.history-track { display:flex; gap:14px; overflow-x:auto; padding-bottom:10px; }
+.history-set { flex: 0 0 auto; background: rgba(0,0,0,.4); border-radius:12px; padding:10px; display:flex; flex-direction:column; align-items:center; gap:6px; min-width:110px; }
+.history-set .cards { display:flex; }
+.history-set .cards .pcard { margin-left:-28px; }
+.history-set .cards .pcard:first-child { margin-left:0; }
+.toast { position:fixed; bottom:16px; left:50%; transform:translateX(-50%); background: #111; color: #fff; padding: 10px 18px; border-radius: 12px; font-size:.9rem; z-index:80; opacity:0; transition: opacity .25s ease; }
+.toast.show { opacity:1; }
+
+@media (max-width: 620px){
+  .table-oval { max-height: 48vh; }
+  .seat { width:112px; }
+  .seat .avatar { width:40px;height:40px; font-size:1rem; }
+  .pcard { --w:92px; --h:132px; }
+  .pcard.small { --w:66px; --h:96px; }
+  .seat-pile .pcard { margin-left:-30px; }
+  .hand-row .pcard { margin-left:-32px; }
 }
